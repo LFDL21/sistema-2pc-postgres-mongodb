@@ -107,69 +107,101 @@ sistema-2pc-postgres-mongodb/
 
 ---
 
-## 5. Pré-requisitos e Instalação
+## 5. Pré-requisitos e Instalação em Qualquer Computador (Windows)
 
-### Pré-requisitos
-1. **Node.js** (versão 20 LTS ou superior instalada no Windows).
-2. **PostgreSQL** instalado e ativo no serviço local (Porta padrão: `5432`).
-   - O banco de dados `sistema_2pc` deve estar criado no pgAdmin ou via terminal `psql`.
-3. **MongoDB** Community Server instalado e ativo no serviço local (Porta padrão: `27017`).
+Este projeto foi projetado para ser **100% reproduzível** em qualquer computador Windows com os bancos instalados localmente, sem depender de Docker ou máquinas virtuais.
 
-### Passo a Passo de Instalação
+### 5.1. Pré-requisitos de Software
 
-1. Clone ou abra a pasta do repositório no terminal do Windows (PowerShell):
+1. **Node.js LTS (v20+ ou superior):**
+   - Baixe e instale o instalador oficial para Windows em: [https://nodejs.org/](https://nodejs.org/)
+   - Verifique a instalação no PowerShell:
+     ```powershell
+     node -v
+     npm -v
+     ```
+
+2. **PostgreSQL (v14+ ou superior):**
+   - Baixe o instalador oficial para Windows em: [https://www.postgresql.org/download/windows/](https://www.postgresql.org/download/windows/)
+   - Durante a instalação, defina uma senha para o superusuário padrão `postgres` e mantenha a porta padrão `5432`.
+   - **Criação do Banco de Dados:** Abra o **pgAdmin** (ou o terminal `psql`) e crie o banco de dados `sistema_2pc`:
+     ```sql
+     CREATE DATABASE sistema_2pc;
+     ```
+
+3. **MongoDB Community Server (v6+ ou superior):**
+   - Baixe o instalador para Windows em: [https://www.mongodb.com/try/download/community](https://www.mongodb.com/try/download/community)
+   - Na instalação, marque a opção recomendada: **"Run MongoDB as a Service"** (executa na porta padrão `27017` sem autenticação inicial no ambiente local).
+   - Opcional: Instale o **MongoDB Compass** para inspeção visual dos documentos.
+   - *Nota:* O MongoDB criará o banco `sistema_2pc` e suas coleções automaticamente na primeira operação.
+
+---
+
+### 5.2. Clonando o Repositório e Instalando Dependências
+
+1. Abra o terminal (PowerShell ou Git Bash) e clone o repositório:
    ```powershell
-   cd c:\Users\Pichau\OneDrive\Documentos\GitHub\sistema-2pc-postgres-mongodb
+   git clone https://github.com/LFDL21/sistema-2pc-postgres-mongodb.git
+   cd sistema-2pc-postgres-mongodb
    ```
 
-2. As dependências já foram instaladas via `npm install`. Caso necessário reinstalar:
+2. Instale todas as dependências declaradas no `package.json`:
    ```powershell
    npm install
    ```
 
 ---
 
-## 6. Configuração do `.env` (IMPORTANTE)
+## 6. Configuração do Ambiente (`.env`)
 
-O projeto lê as configurações do arquivo `.env` na raiz. Um arquivo de exemplo [`.env.example`](file:///.env.example) está disponível.
+O projeto lê as configurações a partir do arquivo `.env` na raiz. Um modelo de exemplo seguro [`.env.example`](file:///.env.example) é fornecido no repositório.
 
-**Você deve criar seu arquivo `.env` local copiando o exemplo:**
+1. **Crie o arquivo `.env` copiando o modelo de exemplo:**
+   ```powershell
+   Copy-Item .env.example .env
+   # No Linux/Mac/Git Bash: cp .env.example .env
+   ```
 
-No PowerShell:
-```powershell
-Copy-Item .env.example .env
-```
+2. **Edite o arquivo `.env` e insira a senha do seu PostgreSQL local:**
+   ```env
+   PORT=3000
+   POSTGRES_HOST=127.0.0.1
+   POSTGRES_PORT=5432
+   POSTGRES_DB=sistema_2pc
+   POSTGRES_USER=postgres
+   POSTGRES_PASSWORD=SUA_SENHA_AQUI
+   MONGO_URI=mongodb://127.0.0.1:27017/sistema_2pc
+   MONITOR_INTERVAL_MS=10
+   ```
 
-Abra o arquivo `.env` e preencha a sua **senha local do PostgreSQL**:
-
-```env
-PORT=3000
-POSTGRES_HOST=127.0.0.1
-POSTGRES_PORT=5432
-POSTGRES_DB=sistema_2pc
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=SUA_SENHA_AQUI
-MONGO_URI=mongodb://127.0.0.1:27017/sistema_2pc
-MONITOR_INTERVAL_MS=10
-```
-
-> **Atenção:** O arquivo `.env` está explicitamente ignorado no `.gitignore` e **nunca** deve ser commitado no repositório.
+> [!IMPORTANT]
+> O arquivo `.env` está configurado no `.gitignore` e **nunca** deve ser enviado ao GitHub para garantir a segurança de suas credenciais locais.
 
 ---
 
-## 7. Como Executar a Aplicação
+## 7. Inicialização Automática e Execução da Aplicação
 
-### Modo Produção / Padrão:
+### 7.1. Criação Automática do Schema nos Bancos
+O projeto **cria automaticamente** todas as tabelas (`products`, `coordinator_transactions`) e índices no PostgreSQL e as coleções e índices no MongoDB logo na primeira inicialização da aplicação (`npm start`).
+
+Caso deseje criar/verificar os bancos de dados explicitamente antes de iniciar o servidor web, execute:
 ```powershell
-npm start
+npm run db:init
 ```
 
-### Modo Desenvolvimento (Hot Reload):
-```powershell
-npm run dev
-```
+### 7.2. Iniciar a Aplicação
 
-Abra seu navegador em:
+- **Modo Padrão / Produção:**
+  ```powershell
+  npm start
+  ```
+
+- **Modo Desenvolvimento (com recarregamento automático ao editar arquivos):**
+  ```powershell
+  npm run dev
+  ```
+
+Após iniciar, acesse o dashboard no navegador:
 👉 **[http://localhost:3000](http://localhost:3000)**
 
 ---

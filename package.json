@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:init": "node -e \"import('./src/database/init.js').then(m => m.initDatabases()).then(() => process.exit(0))\""
   },
   "keywords": [
     "distributed-systems",
