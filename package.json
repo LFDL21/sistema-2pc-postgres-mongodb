@@ -1,0 +1,34 @@
+{
+  "name": "sistema-2pc-postgres-mongodb",
+  "version": "1.0.0",
+  "description": "Sistema de Persistência Distribuída com PostgreSQL, MongoDB e Protocolo 2PC Coordenado pela Aplicação",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "distributed-systems",
+    "two-phase-commit",
+    "2pc",
+    "postgresql",
+    "mongodb",
+    "transaction-coordinator"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongodb": "^6.14.0",
+    "pg": "^8.13.3",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.7"
+  }
+}

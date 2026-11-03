@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema 2PC Distribuído — PostgreSQL & MongoDB</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo-area">
+        <span class="badge-tag">Sistemas Distribuídos</span>
+        <h1>Coordenação 2PC: PostgreSQL &amp; MongoDB</h1>
+        <p class="subtitle">Persistência distribuída coordenada no nível da aplicação com detecção e compensação de falhas</p>
+      </div>
+
+      <div class="connection-status-panel">
+        <div class="db-badge" id="pg-status-badge">
+          <span class="status-indicator status-offline" id="pg-dot"></span>
+          <div class="db-info">
+            <span class="db-name">PostgreSQL</span>
+            <span class="db-subtext" id="pg-status-text">Verificando...</span>
+          </div>
+        </div>
+
+        <div class="db-badge" id="mongo-status-badge">
+          <span class="status-indicator status-offline" id="mongo-dot"></span>
+          <div class="db-info">
+            <span class="db-name">MongoDB</span>
+            <span class="db-subtext" id="mongo-status-text">Verificando...</span>
+          </div>
+        </div>
+
+        <button class="btn btn-outline-sm" id="btn-refresh-health" title="Recarregar status dos bancos">
+          ↻ Atualizar
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- BARRA DE AVISOS / MENSAGENS -->
+    <div id="alert-banner" class="alert-banner hidden">
+      <span id="alert-icon" class="alert-icon">ℹ️</span>
+      <div id="alert-content" class="alert-content"></div>
+      <button id="alert-close" class="alert-close">&times;</button>
+    </div>
+
+    <!-- SEÇÃO PRINCIPAL: FORMULÁRIO E EXECUÇÃO DE CENÁRIOS 1 E 2 -->
+    <div class="grid-2col">
+      <!-- CARD 1: FORMULÁRIO DE PERSISTÊNCIA -->
+      <section class="card">
+        <div class="card-header">
+          <h2>1. Cadastro de Registro &amp; Execução 2PC</h2>
+          <span class="badge-pill">Cenários 1 e 2</span>
+        </div>
+        <div class="card-body">
+          <form id="product-form">
+            <div class="form-row">
+              <div class="form-group col-4">
+                <label for="prod-id">Código / ID *</label>
+                <input type="text" id="prod-id" placeholder="Ex: PRD-101" required>
+              </div>
+              <div class="form-group col-8">
+                <label for="prod-name">Nome do Item *</label>
+                <input type="text" id="prod-name" placeholder="Ex: Servidor Dell PowerEdge" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="prod-desc">Descrição</label>
+              <input type="text" id="prod-desc" placeholder="Detalhes opcionais do produto">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group col-6">
+                <label for="prod-price">Preço (R$) *</label>
+                <input type="number" id="prod-price" step="0.01" min="0" placeholder="1500.00" required>
+              </div>
+              <div class="form-group col-6">
+                <label for="prod-stock">Quantidade em Estoque *</label>
+                <input type="number" id="prod-stock" min="0" placeholder="10" required>
+              </div>
+            </div>
+
+            <!-- SIMULAÇÃO DE FALHAS -->
+            <div class="fault-box">
+              <label for="simulate-fault">Simular Falha Controlada:</label>
+              <select id="simulate-fault">
+                <option value="none">Nenhuma (Fluxo Normal Feliz)</option>
+                <option value="mongo_prepare">Falha na gravação do MongoDB (Phase 1)</option>
+                <option value="postgres_prepare">Falha na gravação do PostgreSQL (Phase 1)</option>
+                <option value="before_commit">Falha imediatamente antes do COMMIT</option>
+                <option value="postgres_commit">Interrupção no COMMIT do PostgreSQL (Phase 2)</option>
+                <option value="mongo_commit">Interrupção no COMMIT do MongoDB (Phase 2)</option>
+              </select>
+              <small class="help-text">Simula falhas programadas na aplicação para demonstrar rollback ou recuperação.</small>
+            </div>
+
+            <!-- BOTÕES DE CENÁRIOS -->
+            <div class="button-group">
+              <button type="button" id="btn-scenario-1" class="btn btn-primary">
+                ▶ Executar Cenário 1 (PG primeiro)
+              </button>
+              <button type="button" id="btn-scenario-2" class="btn btn-secondary">
+                ▶ Executar Cenário 2 (Mongo primeiro)
+              </button>
+              <button type="button" id="btn-quick-fill" class="btn btn-ghost" title="Preencher com dados aleatórios">
+                🎲 Gerar Dados
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- CARD 2: RESULTADO DA OPERAÇÃO 2PC (TIMELINE / AUDITORIA) -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Rastreamento da Transação</h2>
+          <span id="last-tx-badge" class="badge-status">Aguardando operação</span>
+        </div>
+        <div class="card-body">
+          <div id="tx-empty-state" class="empty-state">
+            Nenhuma operação recente disparada. Clique em um dos cenários ao lado para executar o protocolo 2PC.
+          </div>
+          <div id="tx-details-panel" class="hidden">
+            <div class="tx-summary-bar">
+              <div><strong>TX ID:</strong> <span id="tx-summary-id" class="code-tag">-</span></div>
+              <div><strong>Decisão:</strong> <span id="tx-summary-decision" class="badge-decision">-</span></div>
+              <div><strong>PG:</strong> <span id="tx-summary-pg">-</span></div>
+              <div><strong>Mongo:</strong> <span id="tx-summary-mongo">-</span></div>
+            </div>
+            <h4>Linha do Tempo dos Passos Coordenados:</h4>
+            <div id="tx-timeline-list" class="timeline-list"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- SEÇÃO CENÁRIO 3: ATUALIZAÇÃO E MONITORAMENTO INDEPENDENTE -->
+    <section class="card section-scenario-3">
+      <div class="card-header">
+        <div class="title-with-desc">
+          <h2>3. Cenário 3 — Atualização &amp; Monitoramento Contínuo</h2>
+          <p>Consulta contínua das duas bases a cada 10ms com prevenção de sobreposição de ciclos.</p>
+        </div>
+        <div class="monitor-controls">
+          <div class="interval-input-group">
+            <label for="monitor-interval-input">Intervalo:</label>
+            <input type="number" id="monitor-interval-input" value="10" min="5" max="5000" style="width: 70px;">
+            <span>ms</span>
+          </div>
+          <button id="btn-start-monitor" class="btn btn-success">▶ Iniciar Monitor</button>
+          <button id="btn-stop-monitor" class="btn btn-danger hidden">⏹ Parar Monitor</button>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <!-- MÉTRICAS DO MONITOR -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-label">Status de Consistência</span>
+            <div id="metric-consistency-badge" class="metric-value badge-consistent">Aguardando</div>
+            <span class="metric-sub" id="metric-last-check">Última checagem: -</span>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">Duração da Consulta</span>
+            <div class="metric-value"><span id="metric-duration">0.00</span> <small>ms</small></div>
+            <span class="metric-sub">Média: <span id="metric-avg-duration">0.00</span> ms</span>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">Total de Ciclos</span>
+            <div class="metric-value" id="metric-total-cycles">0</div>
+            <span class="metric-sub">Divergências detectadas: <span id="metric-divergent-count">0</span></span>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">Contagem de Registros</span>
+            <div class="metric-value"><span id="metric-pg-count">0</span> (PG) / <span id="metric-mongo-count">0</span> (Mongo)</div>
+            <span class="metric-sub" id="metric-count-status">Sincronizados</span>
+          </div>
+        </div>
+
+        <!-- LISTA DE DIVERGÊNCIAS (SE HOUVER) -->
+        <div id="divergence-box" class="divergence-box hidden">
+          <h4>⚠️ Divergências Detectadas Entre PostgreSQL e MongoDB:</h4>
+          <ul id="divergence-list"></ul>
+        </div>
+
+        <!-- FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA (CENÁRIO 3) -->
+        <div class="update-section">
+          <h3>Atualizar Registro com Coordenação 2PC</h3>
+          <div class="form-row">
+            <div class="form-group col-3">
+              <label for="up-id">ID do Produto *</label>
+              <input type="text" id="up-id" placeholder="Ex: PRD-101">
+            </div>
+            <div class="form-group col-3">
+              <label for="up-price">Novo Preço (R$)</label>
+              <input type="number" id="up-price" step="0.01" min="0" placeholder="1999.90">
+            </div>
+            <div class="form-group col-3">
+              <label for="up-stock">Novo Estoque</label>
+              <input type="number" id="up-stock" min="0" placeholder="25">
+            </div>
+            <div class="form-group col-3 btn-align-bottom">
+              <button type="button" id="btn-scenario-3-update" class="btn btn-warning full-width">
+                🔄 Atualizar Coordenado
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEÇÃO COMPARATIVO LADO A LADO DAS BASES -->
+    <section class="card">
+      <div class="card-header">
+        <h2>Dados Persistidos: PostgreSQL vs MongoDB</h2>
+        <div class="header-actions">
+          <button id="btn-refresh-tables" class="btn btn-outline-sm">↻ Atualizar Tabelas</button>
+          <button id="btn-recovery-worker" class="btn btn-outline-sm btn-recover" title="Executar rotina de recuperação para resolver transações órfãs">
+            🛠 Executar Recuperação
+          </button>
+          <button id="btn-clear-databases" class="btn btn-outline-sm btn-danger-outline" title="Limpar todos os registros de teste">
+            🗑 Limpar Bases
+          </button>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="tables-comparison-grid">
+          <!-- TABELA POSTGRES -->
+          <div class="db-table-wrapper">
+            <div class="table-title">
+              <span class="db-icon">🐘</span>
+              <h3>PostgreSQL (Tabela <code>products</code>)</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="table-postgres">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>Preço</th>
+                    <th>Estoque</th>
+                    <th>Status 2PC</th>
+                    <th>TX ID</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-postgres">
+                  <tr><td colspan="6" class="text-center">Nenhum registro.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- TABELA MONGODB -->
+          <div class="db-table-wrapper">
+            <div class="table-title">
+              <span class="db-icon">🍃</span>
+              <h3>MongoDB (Coleção <code>products</code>)</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="table-mongodb">
+                <thead>
+                  <tr>
+                    <th>_id</th>
+                    <th>Nome</th>
+                    <th>Preço</th>
+                    <th>Estoque</th>
+                    <th>Status 2PC</th>
+                    <th>tx_id</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-mongodb">
+                  <tr><td colspan="6" class="text-center">Nenhum registro.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEÇÃO HISTÓRICO DAS TRANSAÇÕES -->
+    <section class="card">
+      <div class="card-header">
+        <h2>Histórico de Transações do Coordenador</h2>
+        <button id="btn-refresh-tx-log" class="btn btn-outline-sm">↻ Atualizar Log</button>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="data-table" id="table-tx-history">
+            <thead>
+              <tr>
+                <th>Horário</th>
+                <th>TX ID</th>
+                <th>Cenário</th>
+                <th>Operação</th>
+                <th>Status Decisão</th>
+                <th>PG State</th>
+                <th>Mongo State</th>
+                <th>Detalhes / Erro</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-tx-history">
+              <tr><td colspan="8" class="text-center">Nenhuma transação registrada ainda.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div class="container">
+      <p>Sistemas Distribuídos — Persistência com PostgreSQL, MongoDB e 2PC Coordenado pela Aplicação</p>
+      <small>Executando nativamente no Windows • Sem emulação de container</small>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
